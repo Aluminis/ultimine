@@ -1,0 +1,71 @@
+name: Publish package to GitHub Packages
+on:
+  release:
+    types: [created]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Get release tags
+        id: get-latest-tag
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            if (releases.length === 0) {
+              console.log("No releases found.");
+              return null;
+            }
+            const latestRelease = releases.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+            console.log("Latest release tag:", latestRelease.tag_name);
+            return latestRelease.tag_name;
+          result-encoding: string
+
+      - name: Set environment variable
+        run: |
+          echo "GITHUB_VERSION=${{ steps.get-latest-tag.outputs.result }}" >> $GITHUB_ENV
+          echo "Set GITHUB_VERSION env variable to ${{ steps.get-latest-tag.outputs.result }}"
+
+      - name: Make Local Publication
+        run: ./gradlew publish
+
+      - name: Deploy Maven
+        run: ./gradlew :deploy-maven
+        env:
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
+          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+          JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_USERNAME: ${{ secrets.JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_SONATYPE_USERNAME }}
+          JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_PASSWORD: ${{ secrets.JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_SONATYPE_TOKEN }}
+
+      - name: Publish Modrinth version
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+
+          name: Aluminis Inject ${{ steps.get-latest-tag.outputs.result }}
+          version: ${{ steps.get-latest-tag.outputs.result }}
+

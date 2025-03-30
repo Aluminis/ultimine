@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "net.aluminis.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"net.aluminis.ultimine.mixin.ExampleMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
